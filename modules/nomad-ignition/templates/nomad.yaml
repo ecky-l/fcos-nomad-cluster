@@ -1,0 +1,148 @@
+---
+variant: fcos
+version: 1.1.0
+storage:
+  directories:
+    - path: /var/log/provision-done
+      mode: 0755
+    %{~ if contains(roles, "server") ~}
+    - path: /mnt/data/nomad/server
+      mode: 0755
+    - path: /etc/nomad/server.d
+      mode: 0755
+    %{~ endif ~}
+    %{~ if contains(roles, "client") ~}
+    - path: /mnt/data/nomad/client
+      mode: 0755
+    - path: /etc/nomad/client.d
+      mode: 0755
+    %{~ endif ~}
+  files:
+    - path: /usr/local/bin/install-nomad.sh
+      mode: 0755
+      overwrite: true
+      contents:
+        inline: |
+          #!/bin/bash -e
+          hostnamectl set-hostname n1.local.vlan --static
+          curl -sL https://releases.hashicorp.com/nomad/${nomad_version}/nomad_${nomad_version}_linux_amd64.zip \
+              --output /var/local/nomad.zip
+          podman run -it --rm -v /var/local:/mnt:Z -w /mnt docker.io/library/busybox unzip nomad.zip
+          rm -f /var/local/nomad.zip
+          mv /var/local/nomad /usr/local/bin/
+          chcon -t bin_t /usr/local/bin/nomad
+          touch /var/log/provision-done/install-nomad
+    %{~ if contains(roles, "server") ~}
+    - path: /etc/nomad/server.d/server.hcl
+      mode: 0755
+      overwrite: true
+      contents:
+        inline: |
+          server {
+            enabled = true
+            bootstrap_expect = ${bootstrap_expect}
+          }
+          data_dir  = "/mnt/data/nomad/server"
+          enable_syslog = true
+          addresses {
+            http = "${public_ip}"
+            rpc = "${cluster_ip}"
+            serf = "${cluster_ip}"
+          }
+          ports {
+            http = 4646
+            rpc  = 4647
+            serf = 4648
+          }
+    %{~ endif ~}
+    %{~ if contains(roles, "client") ~}
+    - path: /etc/nomad/client.d/server.hcl
+      mode: 0755
+      overwrite: true
+      contents:
+        inline: |
+          client {
+            enabled = true
+            servers = [${nomad_servers}]
+          }
+          data_dir  = "/mnt/data/nomad/client"
+          enable_syslog = true
+          addresses {
+            http = "${public_ip}"
+            rpc = "${cluster_ip}"
+            serf = "${cluster_ip}"
+          }
+          ports {
+            http = 4746
+            rpc  = 4747
+            serf = 4748
+          }
+    %{~ endif ~}
+systemd:
+  units:
+    - name: install-nomad.service
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Install nomad
+        After=network-online.target
+        Wants=network-online.target
+        Before=systemd-user-sessions.service
+        ConditionPathExists=!/var/log/provision-done/install-nomad
+        [Service]
+        Type=oneshot
+        RemainAfterExit=true
+        ExecStart=/usr/local/bin/install-nomad.sh
+        StandardOutput=kmsg+console
+        StandardError=kmsg+console
+        [Install]
+        WantedBy=multi-user.target
+    %{~ if contains(roles, "server") ~}
+    - name: nomad-server.service
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Nomad Server
+        Documentation=https://www.nomadproject.io/docs
+        Wants=network-online.target
+        After=network-online.target
+        [Service]
+        ExecReload=/bin/kill -HUP $MAINPID
+        ExecStart=/usr/local/bin/nomad agent -config /etc/nomad/server.d
+        KillMode=process
+        KillSignal=SIGINT
+        LimitNOFILE=infinity
+        LimitNPROC=infinity
+        Restart=on-failure
+        RestartSec=2
+        StartLimitBurst=3
+        StartLimitIntervalSec=10
+        TasksMax=infinity
+        [Install]
+        WantedBy=multi-user.target
+    %{~ endif ~}
+    %{~ if contains(roles, "client") ~}
+    - name: nomad-client.service
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Nomad Client
+        Documentation=https://www.nomadproject.io/docs
+        Wants=network-online.target
+        After=network-online.target
+        [Service]
+        ExecReload=/bin/kill -HUP $MAINPID
+        ExecStart=/usr/local/bin/nomad agent -config /etc/nomad/client.d
+        KillMode=process
+        KillSignal=SIGINT
+        LimitNOFILE=infinity
+        LimitNPROC=infinity
+        Restart=on-failure
+        RestartSec=2
+        StartLimitBurst=3
+        StartLimitIntervalSec=10
+        TasksMax=infinity
+        [Install]
+        WantedBy=multi-user.target
+    %{~ endif ~}
+...
