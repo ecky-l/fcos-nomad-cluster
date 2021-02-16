@@ -5,16 +5,14 @@ storage:
   directories:
     - path: /var/log/provision-done
       mode: 0755
+    - path: /var/lib/nomad/plugins
+      mode: 0755
     %{~ if contains(roles, "server") ~}
     - path: /mnt/data/nomad/server
-      mode: 0755
-    - path: /etc/nomad/server.d
       mode: 0755
     %{~ endif ~}
     %{~ if contains(roles, "client") ~}
     - path: /mnt/data/nomad/client
-      mode: 0755
-    - path: /etc/nomad/client.d
       mode: 0755
     %{~ endif ~}
   files:
@@ -25,15 +23,41 @@ storage:
         inline: |
           #!/bin/bash -e
           hostnamectl set-hostname n1.local.vlan --static
-          curl -sL https://releases.hashicorp.com/nomad/${nomad_version}/nomad_${nomad_version}_linux_amd64.zip \
-              --output /var/local/nomad.zip
+          URL=https://releases.hashicorp.com
+          curl -sL $${URL}/nomad/${nomad_version}/nomad_${nomad_version}_linux_amd64.zip --output /var/local/nomad.zip
+          curl -sL $${URL}/nomad-driver-podman/${driver_podman_version}/nomad-driver-podman_${driver_podman_version}_linux_amd64.zip \
+              --output /var/local/nomad-driver-podman.zip
           podman run -it --rm -v /var/local:/mnt:Z -w /mnt docker.io/library/busybox unzip nomad.zip
-          rm -f /var/local/nomad.zip
+          podman run -it --rm -v /var/local:/mnt:Z -w /mnt docker.io/library/busybox unzip nomad-driver-podman.zip
+          rm -f /var/local/{nomad,nomad-driver-podman}.zip
           mv /var/local/nomad /usr/local/bin/
           chcon -t bin_t /usr/local/bin/nomad
+          mv /var/local/nomad-driver-podman /var/lib/nomad/plugins/
+          chcon -t bin_t /var/lib/nomad/plugins/nomad-driver-podman
           touch /var/log/provision-done/install-nomad
+    - path: /etc/nomad/common.hcl
+      mode: 0644
+      overwrite: true
+      contents:
+        inline: |
+          enable_syslog = true
+          addresses {
+            http = "${public_ip}"
+            rpc = "${cluster_ip}"
+            serf = "${cluster_ip}"
+          }
+          plugin_dir = "/var/lib/nomad/plugins"
+          plugin "nomad-driver-podman" {
+            config {
+              socket_path = "unix://run/podman/podman.sock"
+              volumes {
+                enabled      = true
+                selinuxlabel = "Z"
+              }
+            }
+          }
     %{~ if contains(roles, "server") ~}
-    - path: /etc/nomad/server.d/server.hcl
+    - path: /etc/nomad/server.hcl
       mode: 0755
       overwrite: true
       contents:
@@ -43,12 +67,6 @@ storage:
             bootstrap_expect = ${bootstrap_expect}
           }
           data_dir  = "/mnt/data/nomad/server"
-          enable_syslog = true
-          addresses {
-            http = "${public_ip}"
-            rpc = "${cluster_ip}"
-            serf = "${cluster_ip}"
-          }
           ports {
             http = 4646
             rpc  = 4647
@@ -56,7 +74,7 @@ storage:
           }
     %{~ endif ~}
     %{~ if contains(roles, "client") ~}
-    - path: /etc/nomad/client.d/server.hcl
+    - path: /etc/nomad/client.hcl
       mode: 0755
       overwrite: true
       contents:
@@ -66,12 +84,6 @@ storage:
             servers = [${nomad_servers}]
           }
           data_dir  = "/mnt/data/nomad/client"
-          enable_syslog = true
-          addresses {
-            http = "${public_ip}"
-            rpc = "${cluster_ip}"
-            serf = "${cluster_ip}"
-          }
           ports {
             http = 4746
             rpc  = 4747
@@ -80,6 +92,8 @@ storage:
     %{~ endif ~}
 systemd:
   units:
+    - name: podman.socket
+      enabled: true
     - name: install-nomad.service
       enabled: true
       contents: |
@@ -108,7 +122,7 @@ systemd:
         After=network-online.target
         [Service]
         ExecReload=/bin/kill -HUP $MAINPID
-        ExecStart=/usr/local/bin/nomad agent -config /etc/nomad/server.d
+        ExecStart=/usr/local/bin/nomad agent -config /etc/nomad/common.hcl -config /etc/nomad/server.hcl
         KillMode=process
         KillSignal=SIGINT
         LimitNOFILE=infinity
@@ -132,7 +146,7 @@ systemd:
         After=network-online.target
         [Service]
         ExecReload=/bin/kill -HUP $MAINPID
-        ExecStart=/usr/local/bin/nomad agent -config /etc/nomad/client.d
+        ExecStart=/usr/local/bin/nomad agent -config /etc/nomad/common.hcl -config /etc/nomad/client.hcl
         KillMode=process
         KillSignal=SIGINT
         LimitNOFILE=infinity

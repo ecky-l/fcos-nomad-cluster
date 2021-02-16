@@ -4,6 +4,11 @@ variable "nomad_version" {
   default = "1.0.3"
 }
 
+variable "nomad_driver_podman_version" {
+  type = string
+  default = "0.2.0"
+}
+
 variable "nomads" {
   type = map(object({
     roles = list(string)
