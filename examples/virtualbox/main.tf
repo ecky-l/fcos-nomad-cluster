@@ -14,7 +14,6 @@ locals {
   enp0s9_ipv4 = {
     "ipv4" = {
       "method" = "auto"
-      "ignore-auto-dns" = "true"
     }
   }
 }
@@ -48,6 +47,7 @@ module "vb_nomad" {
   nomads = {
     "n1" = {
       roles = ["server", "client"]
+      hostname = "n1.local.vlan"
       public_ip = "192.168.56.30"
       cluster_ip = "10.10.0.20"
       snippets = [

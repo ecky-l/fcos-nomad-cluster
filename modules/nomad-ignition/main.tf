@@ -25,6 +25,7 @@ data "ct_config" "nomads" {
   content = templatefile("${path.module}/templates/nomad.yaml", {
     nomad_version = var.nomad_version,
     driver_podman_version = var.nomad_driver_podman_version
+    hostname = each.value.hostname
     roles = each.value.roles
     public_ip = each.value.public_ip
     cluster_ip = each.value.cluster_ip

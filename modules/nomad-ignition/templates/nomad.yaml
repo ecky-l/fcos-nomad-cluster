@@ -22,7 +22,7 @@ storage:
       contents:
         inline: |
           #!/bin/bash -e
-          hostnamectl set-hostname n1.local.vlan --static
+          hostnamectl set-hostname ${hostname} --static
           URL=https://releases.hashicorp.com
           curl -sL $${URL}/nomad/${nomad_version}/nomad_${nomad_version}_linux_amd64.zip --output /var/local/nomad.zip
           curl -sL $${URL}/nomad-driver-podman/${driver_podman_version}/nomad-driver-podman_${driver_podman_version}_linux_amd64.zip \
@@ -101,7 +101,7 @@ systemd:
         Description=Install nomad
         After=network-online.target
         Wants=network-online.target
-        Before=systemd-user-sessions.service
+        Before=systemd-user-sessions.service ${contains(roles, "server") ? "nomad-server.service" : ""} ${contains(roles, "client") ? "nomad-client.service" : ""}
         ConditionPathExists=!/var/log/provision-done/install-nomad
         [Service]
         Type=oneshot
@@ -119,7 +119,7 @@ systemd:
         Description=Nomad Server
         Documentation=https://www.nomadproject.io/docs
         Wants=network-online.target
-        After=network-online.target
+        After=network-online.target install-nomad.service
         [Service]
         ExecReload=/bin/kill -HUP $MAINPID
         ExecStart=/usr/local/bin/nomad agent -config /etc/nomad/common.hcl -config /etc/nomad/server.hcl
@@ -143,7 +143,7 @@ systemd:
         Description=Nomad Client
         Documentation=https://www.nomadproject.io/docs
         Wants=network-online.target
-        After=network-online.target
+        After=network-online.target install-nomad.service
         [Service]
         ExecReload=/bin/kill -HUP $MAINPID
         ExecStart=/usr/local/bin/nomad agent -config /etc/nomad/common.hcl -config /etc/nomad/client.hcl

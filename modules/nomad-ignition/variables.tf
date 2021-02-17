@@ -11,6 +11,7 @@ variable "nomad_driver_podman_version" {
 
 variable "nomads" {
   type = map(object({
+    hostname = string
     roles = list(string)
     public_ip = string
     cluster_ip = string
