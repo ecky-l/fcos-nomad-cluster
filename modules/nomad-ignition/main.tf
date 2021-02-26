@@ -9,12 +9,14 @@ locals {
 //  filename = "outputs/nomad${each.key}.yaml"
 //  content = templatefile("${path.module}/templates/nomad.yaml", {
 //    nomad_version = var.nomad_version,
-//    nomad_driver_podman_version = var.nomad_driver_podman_version
+//    driver_podman_version = var.nomad_driver_podman_version
+//    hostname = each.value.hostname
 //    roles = each.value.roles
 //    public_ip = each.value.public_ip
 //    cluster_ip = each.value.cluster_ip
 //    bootstrap_expect = length(local.nomad_servers)
-//    nomad_servers = join(",", [for v in values(local.nomad_servers) : format("\"%s:4647\"", v.cluster_ip)])
+//    nomad_servers = join(",", [for v in values(local.nomad_servers) : format("\"%s\"", v.cluster_ip)])
+//    nomad_other_servers = join(",", [for v in values(local.nomad_servers) : format("\"%s\"", v.cluster_ip) if v.cluster_ip != each.value.cluster_ip])
 //  })
 //}
 
@@ -31,6 +33,7 @@ data "ct_config" "nomads" {
     cluster_ip = each.value.cluster_ip
     bootstrap_expect = length(local.nomad_servers)
     nomad_servers = join(",", [for v in values(local.nomad_servers) : format("\"%s\"", v.cluster_ip)])
+    nomad_other_servers = join(",", [for v in values(local.nomad_servers) : format("\"%s\"", v.cluster_ip) if v.cluster_ip != each.value.cluster_ip])
   })
 
   snippets = each.value.snippets

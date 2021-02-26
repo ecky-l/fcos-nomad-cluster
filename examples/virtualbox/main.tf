@@ -24,6 +24,9 @@ module "vb_snippets" {
     n1 = [
       file("~/.ssh/id_rsa.pub")
     ]
+    n2 = [
+      file("~/.ssh/id_rsa.pub")
+    ]
   }
   networks = {
     n1 = {
@@ -31,13 +34,23 @@ module "vb_snippets" {
         ipv4 = merge(local.enp0s3_ipv4, {address1="10.10.0.20/16,10.10.0.1"})
       }
       enp0s8 = {
-        ipv4 = merge(local.enp0s8_ipv4, {address1="192.168.56.30/24"})
+        ipv4 = merge(local.enp0s8_ipv4, {address1="192.168.56.40/24"})
+      }
+      enp0s9 = local.enp0s9_ipv4
+    }
+    n2 = {
+      enp0s3 = {
+        ipv4 = merge(local.enp0s3_ipv4, {address1="10.10.0.21/16,10.10.0.1"})
+      }
+      enp0s8 = {
+        ipv4 = merge(local.enp0s8_ipv4, {address1="192.168.56.41/24"})
       }
       enp0s9 = local.enp0s9_ipv4
     }
   }
   root_partition = {
     n1 = {}
+    n2 = {}
   }
 }
 
@@ -48,12 +61,23 @@ module "vb_nomad" {
     "n1" = {
       roles = ["server", "client"]
       hostname = "n1.local.vlan"
-      public_ip = "192.168.56.30"
+      public_ip = "192.168.56.40"
       cluster_ip = "10.10.0.20"
       snippets = [
         module.vb_snippets.user_snippets.n1.content,
         module.vb_snippets.network_snippets.n1.content,
         module.vb_snippets.storage_snippets.n1.content,
+      ]
+    }
+    "n2" = {
+      roles = ["server", "client"]
+      hostname = "n2.local.vlan"
+      public_ip = "192.168.56.41"
+      cluster_ip = "10.10.0.21"
+      snippets = [
+        module.vb_snippets.user_snippets.n2.content,
+        module.vb_snippets.network_snippets.n2.content,
+        module.vb_snippets.storage_snippets.n2.content,
       ]
     }
   }
@@ -75,6 +99,12 @@ module "vb_nomad_matchbox" {
       domain = "n1.local.vlan"
       mac = "08:00:27:DD:29:42"
       ignition = module.vb_nomad.nomads["n1"]
+    }
+    n2 = {
+      name = "n2"
+      domain = "n2.local.vlan"
+      mac = "08:00:27:CD:8D:37"
+      ignition = module.vb_nomad.nomads["n2"]
     }
   }
 }

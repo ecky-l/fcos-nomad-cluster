@@ -65,6 +65,11 @@ storage:
           server {
             enabled = true
             bootstrap_expect = ${bootstrap_expect}
+            server_join {
+              retry_join = [${nomad_other_servers}]
+              retry_max = 10
+              retry_interval = "15s"
+            }
           }
           data_dir  = "/mnt/data/nomad/server"
           ports {

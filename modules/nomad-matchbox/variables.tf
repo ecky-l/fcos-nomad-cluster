@@ -12,7 +12,7 @@ variable "os_stream" {
 variable "os_version" {
   type        = string
   description = "Fedora CoreOS version to PXE and install (e.g. 31.20200310.3.0)"
-  default = "33.20210117.3.2"
+  default = "33.20210201.3.0"
 }
 
 variable "install_disk" {
